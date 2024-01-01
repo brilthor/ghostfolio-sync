@@ -1,68 +1,20 @@
+import sys
 from time import sleep
-
 import requests
 from ibflex import client, parser, FlexQueryResponse, BuySell
 from datetime import datetime
 import json
 
 
-def get_cash_amount_from_flex(query):
-    cash = 0
-    try:
-        cash += query.FlexStatements[0].CashReport[0].endingCash
-    except Exception as e:
-        print(e)
-    try:
-        cash += query.FlexStatements[0].CashReport[0].endingCashPaxos
-    except Exception as e:
-        print(e)
-    return cash
-
-
-def generate_chunks(lst, n):
-    for i in range(0, len(lst), n):
-        yield lst[i:i + n]
-
-
-def format_act(act):
-    symbol_nested = act.get("SymbolProfile", {"symbol": ""}).get("symbol")
-    return {
-        "accountId": act["accountId"],
-        "date": act["date"][0:18],
-        "fee": float(act["fee"]),
-        "quantity": act["quantity"],
-        "symbol": act.get("symbol", symbol_nested),
-        "type": act["type"],
-        "unitPrice": act["unitPrice"]
-    }
-
-
-def is_act_present(act_search, acts):
-    for act in acts:
-        act1 = format_act(act)
-        act2 = format_act(act_search)
-        if act1 == act2:
-            return True
-    return False
-
-
-def get_diff(old_acts, new_acts):
-    diff = []
-    for new_act in new_acts:
-        if not is_act_present(new_act, old_acts):
-            diff.append(new_act)
-    return diff
-
-
 class SyncIBKR:
-    IBKRCATEGORY = "9da3a8a7-4795-43e3-a6db-ccb914189737"
 
-    def __init__(self, ghost_host, ibkrtoken, ibkrquery, ghost_token, ghost_currency):
+    def __init__(self, ghost_host, ibkrtoken, ibkrquery, ghost_token, ghost_currency, ibkr_category):
         self.ghost_token = ghost_token
         self.ghost_host = ghost_host
         self.ghost_currency = ghost_currency
         self.ibkrtoken = ibkrtoken
         self.ibkrquery = ibkrquery
+        self.ibkr_category = ibkr_category
 
     def sync_ibkr(self):
         print("Fetching Query")
@@ -72,27 +24,46 @@ class SyncIBKR:
         activities = []
         date_format = "%Y-%m-%d"
         account_id = self.create_or_get_IBKR_accountId()
-        if account_id == "":
-            print("Failed to retrieve account ID closing now")
+        if not account_id:
+            print("Failed to retrieve account ID. Closing now.")
             return
-        self.set_cash_to_account(account_id, get_cash_amount_from_flex(query))
+        self.set_cash_to_account(account_id, self.get_cash_amount_from_flex(query, self.ghost_currency))
         for trade in query.FlexStatements[0].Trades:
             if trade.openCloseIndicator is None:
-                print("trade is not open or close (ignoring): %s", trade)
+                print("Trade is not open or close (ignoring):", trade)
             elif trade.openCloseIndicator.CLOSE:
                 date = datetime.strptime(str(trade.tradeDate), date_format)
                 iso_format = date.isoformat()
                 symbol = trade.symbol
-                if ".USD-PAXOS" in trade.symbol:
-                    symbol = trade.symbol.replace(".USD-PAXOS", "") + "USD"
-                elif "VUAA" in trade.symbol:
-                    symbol = trade.symbol + ".L"
+
+                if not trade.currency or trade.currency == "":
+                    print("Trade has no currency (ignoring):", trade)
+                    continue
+                else:
+                    print("Trade has currency:", trade.currency)
+
+                if trade.currency == "EUR":
+                    continue
+
+                symbol_mapping = {
+                    ".USD-PAXOS": "USD",
+                    "VUAA": ".L",
+                    "ENGI": ".PA",
+                    "ARRDd": "MT.AS",
+                    "AKZA": ".AS",
+                    "ALFEN": ".AS"
+                }
+                for key, value in symbol_mapping.items():
+                    if key in trade.symbol:
+                        symbol = trade.symbol.replace(key, "") + value
+                        break
+
                 if trade.buySell == BuySell.BUY:
                     buysell = "BUY"
                 elif trade.buySell == BuySell.SELL:
                     buysell = "SELL"
                 else:
-                    print("trade is not buy or sell (ignoring): %s", trade)
+                    print("Trade is not buy or sell (ignoring):", trade)
                     continue
 
                 activities.append({
@@ -108,24 +79,50 @@ class SyncIBKR:
                     "unitPrice": float(trade.tradePrice)
                 })
 
-        diff = get_diff(self.get_all_acts_for_account(account_id), activities)
+        diff = self.get_diff(self.get_all_acts_for_account(account_id), activities)
         if len(diff) == 0:
             print("Nothing new to sync")
         else:
             self.import_act(diff)
 
+    def get_cash_amount_from_flex(self, query, currency="EUR"):
+        cash = 0
+        try:
+            for item in query.FlexStatements[0].CashReport:
+            # Check if the currency field exists and is equal to 'EUR'
+                if hasattr(item, 'currency') and item.currency == currency:
+                    cash += item.endingCash
+                    print(cash)
+            #cash += query.FlexStatements[0].CashReport[0].endingCash
+        except Exception as e:
+            print(e)
+        try:
+            print("Trying to get cash from paxos")
+            cash += query.FlexStatements[0].CashReport[0].endingCashPaxos
+        except Exception as e:
+            print(e)
+        return cash
+
+    def get_diff(self, old_acts, new_acts):
+        diff = []
+        for new_act in new_acts:
+            if new_act not in old_acts:
+                diff.append(new_act)
+        return diff
+
     def set_cash_to_account(self, account_id, cash):
         if cash == 0:
             print("No cash set, no cash retrieved")
             return False
+        print(cash)
+        
         account = {
-            "accountType": "SECURITIES",
             "balance": float(cash),
             "id": account_id,
             "currency": self.ghost_currency,
             "isExcluded": False,
             "name": "IBKR",
-            "platformId": self.IBKRCATEGORY
+            "platformId": self.ibkr_category
         }
 
         url = f"{self.ghost_host}/api/v1/account/{account_id}"
@@ -136,25 +133,24 @@ class SyncIBKR:
             'Content-Type': 'application/json'
         }
         try:
-            response = requests.request("PUT", url, headers=headers, data=payload)
+            response = requests.put(url, headers=headers, data=payload)
         except Exception as e:
             print(e)
             return False
         if response.status_code == 200:
             print(f"Updated Cash for account {response.json()['id']}")
         else:
-            print("Failed create: " + response.text)
+            print("Failed create:", response.text)
         return response.status_code == 200
 
     def delete_act(self, act_id):
         url = f"{self.ghost_host}/api/v1/order/{act_id}"
 
-        payload = {}
         headers = {
             'Authorization': f"Bearer {self.ghost_token}",
         }
         try:
-            response = requests.request("DELETE", url, headers=headers, data=payload)
+            response = requests.delete(url, headers=headers)
         except Exception as e:
             print(e)
             return False
@@ -162,7 +158,7 @@ class SyncIBKR:
         return response.status_code == 200
 
     def import_act(self, bulk):
-        chunks = generate_chunks(bulk, 10)
+        chunks = self.generate_chunks(bulk, 10)
         for acts in chunks:
             url = f"{self.ghost_host}/api/v1/import"
             formatted_acts = json.dumps({"activities": sorted(acts, key=lambda x: x["date"])})
@@ -171,48 +167,34 @@ class SyncIBKR:
                 'Authorization': f"Bearer {self.ghost_token}",
                 'Content-Type': 'application/json'
             }
-            print("Adding activities: " + formatted_acts)
+            print("Adding activities:", formatted_acts)
             try:
-                response = requests.request("POST", url, headers=headers, data=payload)
+                response = requests.post(url, headers=headers, data=payload)
             except Exception as e:
                 print(e)
-                return False
+                continue
             if response.status_code == 201:
-                print(f"created {formatted_acts}")
+                print(f"Created {formatted_acts}")
             else:
-                print("Failed create: " + response.text)
+                print("Failed create:", response.text)
+                print("**********************")
+                print(formatted_acts)
             if response.status_code != 201:
                 return False
         return True
 
-    def addAct(self, act):
-        url = f"{self.ghost_host}/api/v1/order"
-
-        payload = json.dumps(act)
-        headers = {
-            'Authorization': f"Bearer {self.ghost_token}",
-            'Content-Type': 'application/json'
-        }
-        print("Adding activity: " + json.dumps(act))
-        try:
-            response = requests.request("POST", url, headers=headers, data=payload)
-        except Exception as e:
-            print(e)
-            return False
-        if response.status_code == 201:
-            print(f"created {response.json()['id']}")
-        else:
-            print("Failed create: " + response.text)
-        return response.status_code == 201
+    def generate_chunks(self, lst, n):
+        for i in range(0, len(lst), n):
+            yield lst[i:i + n]
 
     def create_ibkr_account(self):
+        print("Try creating account")
         account = {
-            "accountType": "SECURITIES",
             "balance": 0,
             "currency": self.ghost_currency,
             "isExcluded": False,
             "name": "IBKR",
-            "platformId": "9da3a8a7-4795-43e3-a6db-ccb914189737"
+            "platformId": self.IBKRCATEGORY
         }
 
         url = f"{self.ghost_host}/api/v1/account"
@@ -223,24 +205,25 @@ class SyncIBKR:
             'Content-Type': 'application/json'
         }
         try:
-            response = requests.request("POST", url, headers=headers, data=payload)
+            response = requests.post(url, headers=headers, data=payload)
         except Exception as e:
             print(e)
             return ""
         if response.status_code == 201:
+            
             return response.json()["id"]
-        print("Failed creating ")
+        print(response.json())
+        print("Failed creating account")
         return ""
 
     def get_account(self):
         url = f"{self.ghost_host}/api/v1/account"
 
-        payload = {}
         headers = {
             'Authorization': f"Bearer {self.ghost_token}",
         }
         try:
-            response = requests.request("GET", url, headers=headers, data=payload)
+            response = requests.get(url, headers=headers)
         except Exception as e:
             print(e)
             return []
@@ -253,6 +236,7 @@ class SyncIBKR:
         accounts = self.get_account()
         for account in accounts:
             if account["name"] == "IBKR":
+                print(f"Found IBKR account: {account['id']} and currency {account['currency']} ")
                 return account["id"]
         return self.create_ibkr_account()
 
@@ -270,9 +254,9 @@ class SyncIBKR:
                 act_complete = self.delete_act(act['id'])
                 complete = complete and act_complete
                 if act_complete:
-                    print("Deleted: " + act['id'])
+                    print("Deleted:", act['id'])
                 else:
-                    print("Failed Delete: " + act['id'])
+                    print("Failed Delete:", act['id'])
         return complete
 
     def get_all_acts_for_account(self, account_id):
@@ -286,12 +270,11 @@ class SyncIBKR:
     def get_all_acts(self):
         url = f"{self.ghost_host}/api/v1/order"
 
-        payload = {}
         headers = {
             'Authorization': f"Bearer {self.ghost_token}",
         }
         try:
-            response = requests.request("GET", url, headers=headers, data=payload)
+            response = requests.get(url, headers=headers)
         except Exception as e:
             print(e)
             return []

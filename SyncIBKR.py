@@ -104,11 +104,7 @@ class SyncIBKR:
         return cash
 
     def get_diff(self, old_acts, new_acts):
-        diff = []
-        for new_act in new_acts:
-            if new_act not in old_acts:
-                diff.append(new_act)
-        return diff
+        return [new_act for new_act in new_acts if new_act not in old_acts]
 
     def set_cash_to_account(self, account_id, cash):
         if cash == 0:
@@ -167,18 +163,18 @@ class SyncIBKR:
                 'Authorization': f"Bearer {self.ghost_token}",
                 'Content-Type': 'application/json'
             }
-            print("Adding activities:", formatted_acts)
+            print("Adding activities:", payload)
             try:
                 response = requests.post(url, headers=headers, data=payload)
             except Exception as e:
                 print(e)
                 continue
             if response.status_code == 201:
-                print(f"Created {formatted_acts}")
+                print(f"Created {payload}")
             else:
                 print("Failed create:", response.text)
                 print("**********************")
-                print(formatted_acts)
+                print(payload)
             if response.status_code != 201:
                 return False
         return True
@@ -261,11 +257,7 @@ class SyncIBKR:
 
     def get_all_acts_for_account(self, account_id):
         acts = self.get_all_acts()
-        filtered_acts = []
-        for act in acts:
-            if act['accountId'] == account_id:
-                filtered_acts.append(act)
-        return filtered_acts
+        return [act for act in acts if act['accountId'] == account_id]
 
     def get_all_acts(self):
         url = f"{self.ghost_host}/api/v1/order"
@@ -279,7 +271,4 @@ class SyncIBKR:
             print(e)
             return []
 
-        if response.status_code == 200:
-            return response.json()['activities']
-        else:
-            return []
+        return response.json()['activities'] if response.status_code == 200 else []

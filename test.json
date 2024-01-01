@@ -1,0 +1,101 @@
+{
+    "activities": [
+      {
+        "accountId": "bae58824-beb1-4723-9633-8e953a822051",
+        "comment": null,
+        "currency": "EUR",
+        "dataSource": "YAHOO",
+        "date": "2023-05-18T00:00:00",
+        "fee": 0,
+        "quantity": 5,
+        "symbol": "MT.AS",
+        "type": "BUY",
+        "unitPrice": 24.76
+      },
+      {
+        "accountId": "bae58824-beb1-4723-9633-8e953a822051",
+        "comment": null,
+        "currency": "EUR",
+        "dataSource": "YAHOO",
+        "date": "2023-06-01T00:00:00",
+        "fee": 0,
+        "quantity": 2,
+        "symbol": "ENGI.PA",
+        "type": "BUY",
+        "unitPrice": 14.184
+      },
+      {
+        "accountId": "bae58824-beb1-4723-9633-8e953a822051",
+        "comment": null,
+        "currency": "EUR",
+        "dataSource": "YAHOO",
+        "date": "2023-08-04T00:00:00",
+        "fee": 0,
+        "quantity": 1,
+        "symbol": "AKZA.AS",
+        "type": "BUY",
+        "unitPrice": 77.5
+      },
+      {
+        "accountId": "bae58824-beb1-4723-9633-8e953a822051",
+        "comment": null,
+        "currency": "EUR",
+        "dataSource": "YAHOO",
+        "date": "2023-11-15T00:00:00",
+        "fee": 0,
+        "quantity": 2,
+        "symbol": "ALFEN.AS",
+        "type": "BUY",
+        "unitPrice": 46.43
+      },
+      
+      {
+        "accountId": "bae58824-beb1-4723-9633-8e953a822051",
+        "comment": null,
+        "currency": "EUR",
+        "dataSource": "YAHOO",
+        "date": "2023-12-14T00:00:00",
+        "fee": 0,
+        "quantity": 2,
+        "symbol": "ALFEN.AS",
+        "type": "SELL",
+        "unitPrice": 54.68
+      },
+      {
+        "accountId": "bae58824-beb1-4723-9633-8e953a822051",
+        "comment": null,
+        "currency": "EUR",
+        "dataSource": "YAHOO",
+        "date": "2023-12-15T00:00:00",
+        "fee": 0,
+        "quantity": 4,
+        "symbol": "AD",
+        "type": "BUY",
+        "unitPrice": 26.28
+      },
+      {
+        "accountId": "bae58824-beb1-4723-9633-8e953a822051",
+        "comment": null,
+        "currency": "EUR",
+        "dataSource": "YAHOO",
+        "date": "2023-12-18T00:00:00",
+        "fee": 0,
+        "quantity": 5,
+        "symbol": "MT.AS",
+        "type": "SELL",
+        "unitPrice": 26.205
+      },
+      {
+        "accountId": "bae58824-beb1-4723-9633-8e953a822051",
+        "comment": null,
+        "currency": "EUR",
+        "dataSource": "YAHOO",
+        "date": "2023-12-29T00:00:00",
+        "fee": 0,
+        "quantity": 1,
+        "symbol": "AIRd",
+        "type": "BUY",
+        "unitPrice": 140.16
+      }
+    ]
+  }

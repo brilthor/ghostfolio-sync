@@ -2,7 +2,7 @@ import requests
 from ibflex import client, parser, FlexQueryResponse, BuySell
 from datetime import datetime
 import json
-
+import pprint
 
 class SyncIBKR:
 
@@ -167,6 +167,7 @@ class SyncIBKR:
         cash = 0
         try:
             for item in query.FlexStatements[0].CashReport:
+                pprint.pprint(item)
             # Check if the currency field exists and is equal to 'EUR'
                 if hasattr(item, 'currency') and item.currency == currency:
                     cash += item.endingCash
